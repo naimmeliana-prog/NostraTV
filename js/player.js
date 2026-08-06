@@ -94,7 +94,7 @@ class PlayerEngine {
     if (item.isStalker && item.cmd) {
       const activePl = storageManager.getActivePlaylist();
       if (activePl && activePl.stalkerConfig) {
-        const { portalUrl, entry, mac, token } = activePl.stalkerConfig;
+        const { portalUrl, entry, mac, token, proxy } = activePl.stalkerConfig;
         streamUrl = await apiEngine.createStalkerLink(
           portalUrl,
           entry,
@@ -102,7 +102,8 @@ class PlayerEngine {
           token,
           item.cmd,
           item.type === 'series' ? 'series' : (item.type === 'vod' ? 'vod' : 'itv'),
-          item.seriesNum !== undefined ? item.seriesNum : null
+          item.seriesNum !== undefined ? item.seriesNum : null,
+          proxy
         );
       }
     }

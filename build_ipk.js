@@ -199,7 +199,7 @@ function buildIpkPackage() {
 
     const controlContent = Buffer.from(
       `Package: ${appId}\n` +
-      `Version: 2.4.0\n` +
+      `Version: 2.7.0\n` +
       `Section: misc\n` +
       `Priority: optional\n` +
       `Architecture: all\n` +
@@ -238,9 +238,9 @@ function buildIpkPackage() {
       alignAr(dataTarGz)
     ]);
 
-    const ipkPath = path.join(appDir, 'com.nostratv.app_2.4.0_all.ipk');
+    const ipkPath = path.join(appDir, 'com.nostratv.app_2.7.0_all.ipk');
     fs.writeFileSync(ipkPath, ipkBuf);
-    console.log(`[+] WebOS IPK v2.4.0 generado: ${ipkPath}`);
+    console.log(`[+] WebOS IPK v2.7.0 generado: ${ipkPath}`);
   } catch (e) {
     console.error('[!] Error construyendo el paquete IPK:', e);
   }

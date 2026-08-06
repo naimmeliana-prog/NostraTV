@@ -22,8 +22,30 @@ class ApiEngine {
   // =========================================================================
   // LOW-LEVEL: fetch wrapper with cookie-based MAC auth (mirrors Python impl)
   // =========================================================================
-  _stalkerFetch(url, mac, token) {
-    // Build Cookie header exactly as the working Python tool does
+  _stalkerFetch(url, mac, token, proxyUrl = '') {
+    let activeProxy = proxyUrl;
+
+    if (!activeProxy) {
+      const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || 
+                          window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.');
+      if (isLocalHost && window.location.protocol.startsWith('http')) {
+        activeProxy = `${window.location.origin}/api/stalker-proxy`;
+      } else {
+        // Fallback to the Cloudflare Worker proxy when running on TV or external browser (requires no PC server!)
+        activeProxy = 'https://nostratv.naimmeliana.workers.dev/';
+      }
+    }
+
+    if (activeProxy) {
+      const target = `${activeProxy}?url=${encodeURIComponent(url)}&mac=${encodeURIComponent(mac)}&token=${encodeURIComponent(token || '')}`;
+      if (window.appLog) window.appLog(`Proxy Stalker: ${url.substring(0, 40)}...`, '#eab308');
+      return fetch(target, { method: 'GET', cache: 'no-cache' })
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status} via Proxy`);
+          return r.json();
+        });
+    }
+
     let cookie = `mac=${mac}; stb_lang=en; timezone=Europe/London`;
     if (token) cookie += `; token=${token}`;
 
@@ -51,12 +73,12 @@ class ApiEngine {
   // =========================================================================
   // STALKER HANDSHAKE — MAC in Cookie, no MAC in query
   // =========================================================================
-  async _stalkerHandshake(baseUrl, mac) {
+  async _stalkerHandshake(baseUrl, mac, proxy = '') {
     for (const ep of STALKER_ENTRY_POINTS) {
-      const url = `${baseUrl}${ep}?type=stb&action=handshake&JsHttpRequest=1-xml`;
+      const url = `${baseUrl}${ep}?type=stb&action=handshake&mac=${mac}&JsHttpRequest=1-xml`;
       if (window.appLog) window.appLog(`Handshake: ${ep}`, '#94a3b8');
       try {
-        const data = await this._stalkerFetch(url, mac, null);
+        const data = await this._stalkerFetch(url, mac, null, proxy);
         const js = this._js(data);
         const token = (js && js.token) ? js.token : null;
         if (token) {
@@ -74,29 +96,29 @@ class ApiEngine {
   // =========================================================================
   // STALKER REQUEST — after handshake, MAC+token in cookies
   // =========================================================================
-  async _stalkerReq(baseUrl, entry, mac, token, params) {
+  async _stalkerReq(baseUrl, entry, mac, token, params, proxy = '') {
     const q = new URLSearchParams({ ...params, JsHttpRequest: '1-xml' }).toString();
     const url = `${baseUrl}${entry}?${q}`;
-    const data = await this._stalkerFetch(url, mac, token);
+    const data = await this._stalkerFetch(url, mac, token, proxy);
     return this._js(data);
   }
 
   // =========================================================================
   // MAIN: Load Stalker Portal
   // =========================================================================
-  async loadStalkerPortal(portalUrl, macAddress) {
+  async loadStalkerPortal(portalUrl, macAddress, proxy = '') {
     const base = portalUrl.replace(/\/+$/, '');
     const mac  = macAddress.trim().toUpperCase();
 
     if (window.appLog) window.appLog(`Portal: ${base}  MAC: ${mac}`, '#8b5cf6');
 
     // Step 1: Handshake
-    const { entry, token } = await this._stalkerHandshake(base, mac);
+    const { entry, token } = await this._stalkerHandshake(base, mac, proxy);
 
     // Step 2: Profile (for expiry)
     let expDate = 'Activa';
     try {
-      const profile = await this._stalkerReq(base, entry, mac, token, { type: 'stb', action: 'get_profile' });
+      const profile = await this._stalkerReq(base, entry, mac, token, { type: 'stb', action: 'get_profile' }, proxy);
       expDate = profile.expire_billing_date || profile.end_date || 'Activa';
       if (window.appLog) window.appLog(`Perfil OK. Exp: ${expDate}`, '#22c55e');
     } catch(e) {
@@ -104,9 +126,9 @@ class ApiEngine {
     }
 
     // Step 3: Load ITV, VOD, Series
-    const live    = await this._loadStalkerITV(base, entry, mac, token);
-    const vod     = await this._loadStalkerVOD(base, entry, mac, token);
-    const series  = await this._loadStalkerSeries(base, entry, mac, token);
+    const live    = await this._loadStalkerITV(base, entry, mac, token, proxy);
+    const vod     = await this._loadStalkerVOD(base, entry, mac, token, proxy);
+    const series  = await this._loadStalkerSeries(base, entry, mac, token, proxy);
 
     // Persist token+entry for playback
     try {
@@ -114,7 +136,7 @@ class ApiEngine {
       const aid  = localStorage.getItem('nostratv_active_playlist_id');
       const idx  = pls.findIndex(p => p.id === aid);
       if (idx !== -1) {
-        pls[idx].stalkerConfig = { ...pls[idx].stalkerConfig, entry, token, base };
+        pls[idx].stalkerConfig = { ...pls[idx].stalkerConfig, entry, token, base, proxy };
         localStorage.setItem('nostratv_playlists', JSON.stringify(pls));
       }
     } catch(e) {}
@@ -126,18 +148,21 @@ class ApiEngine {
         vod:    [...new Set(vod.map(i => i.group))].sort(),
         series: [...new Set(series.map(i => i.group))].sort(),
       },
-      stalkerConfig: { portalUrl: base, mac, entry, token }
+      stalkerConfig: { portalUrl: base, mac, entry, token, proxy }
     };
   }
 
   // =========================================================================
   // ITV (Live TV) — uses get_genres (not get_categories!)
   // =========================================================================
-  async _loadStalkerITV(base, entry, mac, token) {
+  // =========================================================================
+  // ITV (Live TV) — uses get_genres (not get_categories!)
+  // =========================================================================
+  async _loadStalkerITV(base, entry, mac, token, proxy = '') {
     if (window.appLog) window.appLog('Cargando géneros ITV...', '#94a3b8');
     let genres = [];
     try {
-      const data = await this._stalkerReq(base, entry, mac, token, { type: 'itv', action: 'get_genres' });
+      const data = await this._stalkerReq(base, entry, mac, token, { type: 'itv', action: 'get_genres' }, proxy);
       genres = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
       if (window.appLog) window.appLog(`ITV: ${genres.length} géneros`, '#94a3b8');
     } catch(e) {
@@ -150,7 +175,7 @@ class ApiEngine {
       const gid   = String(g.id || g.genre_id || '');
       const group = this._cleanTitle(String(g.title || g.genre_title || gid));
       if (!gid) continue;
-      const channels = await this._stalkerList(base, entry, mac, token, 'itv', 'genre', gid);
+      const channels = await this._stalkerList(base, entry, mac, token, 'itv', 'genre', gid, proxy);
       for (const ch of channels) {
         const cmd = this._cleanCmd(String(ch.cmd || ''));
         if (!cmd) continue;
@@ -169,11 +194,11 @@ class ApiEngine {
   // =========================================================================
   // VOD — uses get_categories + category param
   // =========================================================================
-  async _loadStalkerVOD(base, entry, mac, token) {
+  async _loadStalkerVOD(base, entry, mac, token, proxy = '') {
     if (window.appLog) window.appLog('Cargando categorías VOD...', '#94a3b8');
     let cats = [];
     try {
-      const data = await this._stalkerReq(base, entry, mac, token, { type: 'vod', action: 'get_categories' });
+      const data = await this._stalkerReq(base, entry, mac, token, { type: 'vod', action: 'get_categories' }, proxy);
       cats = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : Object.values(data || {}));
       if (window.appLog) window.appLog(`VOD: ${cats.length} categorías`, '#94a3b8');
     } catch(e) {
@@ -186,7 +211,7 @@ class ApiEngine {
       const cid   = String(c.id || c.category_id || '');
       const group = this._cleanTitle(String(c.title || c.category_name || cid));
       if (!cid) continue;
-      const movies = await this._stalkerList(base, entry, mac, token, 'vod', 'category', cid);
+      const movies = await this._stalkerList(base, entry, mac, token, 'vod', 'category', cid, proxy);
       for (const v of movies) {
         items.push({
           id: `stk_vod_${v.id}`, cmd: v.cmd, title: v.name || 'Película',
@@ -201,11 +226,11 @@ class ApiEngine {
   // =========================================================================
   // SERIES
   // =========================================================================
-  async _loadStalkerSeries(base, entry, mac, token) {
+  async _loadStalkerSeries(base, entry, mac, token, proxy = '') {
     if (window.appLog) window.appLog('Cargando categorías Series...', '#94a3b8');
     let cats = [];
     try {
-      const data = await this._stalkerReq(base, entry, mac, token, { type: 'series', action: 'get_categories' });
+      const data = await this._stalkerReq(base, entry, mac, token, { type: 'series', action: 'get_categories' }, proxy);
       cats = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : Object.values(data || {}));
       if (window.appLog) window.appLog(`Series: ${cats.length} categorías`, '#94a3b8');
     } catch(e) {
@@ -218,7 +243,7 @@ class ApiEngine {
       const cid   = String(c.id || c.category_id || '');
       const group = this._cleanTitle(String(c.title || c.category_name || cid));
       if (!cid) continue;
-      const series = await this._stalkerList(base, entry, mac, token, 'series', 'category', cid);
+      const series = await this._stalkerList(base, entry, mac, token, 'series', 'category', cid, proxy);
       for (const s of series) {
         items.push({
           id: `stk_series_${s.id}`, seriesId: s.id, cmd: s.cmd, title: s.name || 'Serie',
@@ -234,14 +259,14 @@ class ApiEngine {
   // =========================================================================
   // PAGINATED LIST FETCHER (mirrors Python list_channels)
   // =========================================================================
-  async _stalkerList(base, entry, mac, token, type, filterKey, filterId) {
+  async _stalkerList(base, entry, mac, token, type, filterKey, filterId, proxy = '') {
     const items = [];
     let page = 1;
     while (page <= 50) {
       try {
         const params = { type, action: 'get_ordered_list', p: page, sortby: 'added' };
         params[filterKey] = filterId;
-        const js = await this._stalkerReq(base, entry, mac, token, params);
+        const js = await this._stalkerReq(base, entry, mac, token, params, proxy);
         let data = js.data || [];
         if (!Array.isArray(data)) data = Object.values(data);
         if (!data.length) break;
@@ -259,8 +284,7 @@ class ApiEngine {
   // =========================================================================
   // RESOLVE STALKER STREAM LINK for playback
   // =========================================================================
-  async createStalkerLink(portalUrl, entry, mac, token, cmd, type, seriesNum) {
-    // If cmd is already a direct URL, return it
+  async createStalkerLink(portalUrl, entry, mac, token, cmd, type, seriesNum, proxy = '') {
     const clean = this._cleanCmd(String(cmd || ''));
     if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
 
@@ -274,7 +298,7 @@ class ApiEngine {
     const q = new URLSearchParams({ ...params, JsHttpRequest: '1-xml' }).toString();
     const url = `${portalUrl}${entry}?${q}`;
     try {
-      const data = await this._stalkerFetch(url, mac, token);
+      const data = await this._stalkerFetch(url, mac, token, proxy);
       const js   = this._js(data);
       const streamUrl = this._cleanCmd(String(js.cmd || js.url || ''));
       return streamUrl || clean;
@@ -287,13 +311,13 @@ class ApiEngine {
   // =========================================================================
   // STALKER SERIES EPISODES
   // =========================================================================
-  async getStalkerSeriesInfo(portalUrl, entry, mac, token, seriesId) {
+  async getStalkerSeriesInfo(portalUrl, entry, mac, token, seriesId, proxy = '') {
     const q = new URLSearchParams({
       type: 'series', action: 'get_ordered_list',
       movie_id: String(seriesId), p: '1', JsHttpRequest: '1-xml'
     }).toString();
     try {
-      const data = await this._stalkerFetch(`${portalUrl}${entry}?${q}`, mac, token);
+      const data = await this._stalkerFetch(`${portalUrl}${entry}?${q}`, mac, token, proxy);
       const js   = this._js(data);
       let rawData = js.data || [];
       if (!Array.isArray(rawData)) rawData = Object.values(rawData);

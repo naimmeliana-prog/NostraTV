@@ -102,6 +102,48 @@ function getLocalIp() {
   return 'localhost';
 }
 
+// GET /api/stalker-proxy
+app.get('/api/stalker-proxy', async (req, res) => {
+  const { url, mac, token } = req.query;
+  if (!url || !mac) {
+    return res.status(400).json({ error: 'Missing url or mac query parameter' });
+  }
+
+  const http = require('http');
+  const https = require('https');
+  const parsedUrl = new URL(url);
+  const client = parsedUrl.protocol === 'https:' ? https : http;
+
+  let cookie = `mac=${mac}; stb_lang=en; timezone=Europe/London`;
+  if (token) cookie += `; token=${token}`;
+
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+    'X-User-Agent': 'Model: MAG250; Link: WiFi',
+    'Cookie': cookie
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const reqOptions = {
+    method: 'GET',
+    headers: headers,
+    timeout: 10000
+  };
+
+  client.get(url, reqOptions, (proxyRes) => {
+    res.status(proxyRes.statusCode);
+    const headersToForward = ['content-type', 'content-encoding', 'content-length'];
+    headersToForward.forEach(h => {
+      if (proxyRes.headers[h]) {
+        res.setHeader(h, proxyRes.headers[h]);
+      }
+    });
+    proxyRes.pipe(res);
+  }).on('error', (err) => {
+    res.status(500).json({ error: err.message });
+  });
+});
+
 // Auto-generate .ipk package for webOS DEV Manager
 function buildIpkPackage() {
   try {

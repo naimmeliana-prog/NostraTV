@@ -372,8 +372,8 @@ class UiController {
       if (plotEl && seriesInfo.plot) plotEl.textContent = seriesInfo.plot;
       seasons = seriesInfo.seasons || [];
     } else if (activePl.type === 'stalker' && activePl.stalkerConfig) {
-      const { portalUrl, entry, mac, token } = activePl.stalkerConfig;
-      const seriesInfo = await apiEngine.getStalkerSeriesInfo(portalUrl, entry, mac, token, seriesItem.seriesId);
+      const { portalUrl, entry, mac, token, proxy } = activePl.stalkerConfig;
+      const seriesInfo = await apiEngine.getStalkerSeriesInfo(portalUrl, entry, mac, token, seriesItem.seriesId, proxy);
       seasons = seriesInfo.seasons || [];
     } else {
       seasons = [
@@ -569,7 +569,7 @@ class UiController {
       } else if (playlist.type === 'xtream') {
         data = await apiEngine.loadXtreamPlaylist(playlist.xtreamConfig.host, playlist.xtreamConfig.username, playlist.xtreamConfig.password);
       } else if (playlist.type === 'stalker') {
-        data = await apiEngine.loadStalkerPortal(playlist.stalkerConfig.portalUrl, playlist.stalkerConfig.mac);
+        data = await apiEngine.loadStalkerPortal(playlist.stalkerConfig.portalUrl, playlist.stalkerConfig.mac, playlist.stalkerConfig.proxy);
       }
 
       if (data) {
@@ -638,6 +638,7 @@ class UiController {
     document.getElementById('input-xtream-pass').value = '';
     document.getElementById('input-stalker-url').value = '';
     document.getElementById('input-stalker-mac').value = '';
+    document.getElementById('input-stalker-proxy').value = '';
 
     document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
     document.querySelector('.tab-btn[data-mode="m3u"]').classList.add('active');
@@ -673,6 +674,7 @@ class UiController {
     } else if (playlist.type === 'stalker' && playlist.stalkerConfig) {
       document.getElementById('input-stalker-url').value = playlist.stalkerConfig.portalUrl || '';
       document.getElementById('input-stalker-mac').value = playlist.stalkerConfig.mac || '';
+      document.getElementById('input-stalker-proxy').value = playlist.stalkerConfig.proxy || '';
     }
 
     this.showModal('modal-playlist-form');
@@ -705,8 +707,9 @@ class UiController {
     } else if (mode === 'stalker') {
       const url = document.getElementById('input-stalker-url').value.trim();
       const mac = document.getElementById('input-stalker-mac').value.trim();
+      const proxy = document.getElementById('input-stalker-proxy').value.trim();
       if (!url || !mac) { alert('Completa los datos del Portal Stalker'); return; }
-      playlistData.stalkerConfig = { portalUrl: url, mac };
+      playlistData.stalkerConfig = { portalUrl: url, mac, proxy };
     }
 
     let savedPl = null;
