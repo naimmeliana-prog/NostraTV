@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 120" width="100%" height="100%">
+  <defs>
+    <linearGradient id="grad-brand" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <linearGradient id="grad-play" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ec4899" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Logo Emblem: Play Triangle inside stylized TV shield -->
+  <g transform="translate(10, 10)">
+    <rect x="5" y="5" width="90" height="90" rx="24" fill="url(#grad-brand)" filter="url(#glow)" opacity="0.3" />
+    <rect x="5" y="5" width="90" height="90" rx="24" fill="none" stroke="url(#grad-brand)" stroke-width="4" />
+    <!-- TV Antenna / Shield details -->
+    <path d="M 30 65 L 42 35 L 58 35 L 70 65 Z" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <!-- Play Icon -->
+    <path d="M 42 35 L 68 50 L 42 65 Z" fill="url(#grad-play)" filter="url(#glow)" />
+    <circle cx="50" cy="50" r="3" fill="#ffffff" />
+  </g>
+
+  <!-- Brand Typography -->
+  <text x="125" y="65" font-family="'Outfit', 'Inter', 'Segoe UI', sans-serif" font-weight="900" font-size="42" letter-spacing="4" fill="#ffffff">
+    NOSTRA<tspan fill="url(#grad-brand)">TV</tspan>
+  </text>
+
+  <!-- Premium Tagline Badge -->
+  <rect x="127" y="78" width="135" height="20" rx="6" fill="rgba(139, 92, 246, 0.2)" stroke="rgba(139, 92, 246, 0.4)" stroke-width="1"/>
+  <text x="135" y="92" font-family="'Inter', sans-serif" font-weight="700" font-size="10" letter-spacing="2" fill="#a78bfa">PREMIUM IPTV</text>
+</svg>

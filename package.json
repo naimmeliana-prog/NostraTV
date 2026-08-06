@@ -1,0 +1,29 @@
+{
+  "name": "nostra-tv",
+  "version": "1.0.0",
+  "description": "App IPTV premium nativa para LG webOS 6.5.3 (M3U, Xtream Codes, MAC Stalker)",
+  "main": "index.html",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "build": "node build_ipk.js"
+  },
+  "keywords": [
+    "iptv",
+    "webos",
+    "lg-tv",
+    "m3u",
+    "xtream-codes",
+    "stalker-portal",
+    "mac-stalker"
+  ],
+  "author": "NostraTV",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
+    "qrcode": "^1.5.3",
+    "cors": "^2.8.5"
+  }
+}

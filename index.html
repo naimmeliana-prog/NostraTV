@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0">
+  <title>NOSTRA TV - IPTV Native for LG webOS</title>
+  
+  <!-- HLS.js Library - LOCAL (no CDN dependency) -->
+  <script src="js/hls.min.js"></script>
+  
+  <!-- CSS Styles -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-dark">
+
+  <!-- DEBUG OVERLAY (visible on TV to diagnose errors - press GREEN key to toggle) -->
+  <div id="debug-overlay" style="
+    position: fixed; bottom: 0; left: 0; right: 0;
+    max-height: 200px; overflow-y: auto;
+    background: rgba(0,0,0,0.85); color: #94a3b8;
+    font-size: 13px; font-family: monospace;
+    padding: 10px; z-index: 9999;
+    display: none;
+  "></div>
+
+  <!-- APP CONTAINER -->
+  <div id="app-container" class="app-root">
+
+    <!-- TOP BAR / HEADER -->
+    <header id="top-header" class="top-header">
+      <div class="header-brand" data-action="go-home">
+        <div class="brand-icon-box">
+          <span class="brand-play-icon">▶</span>
+        </div>
+        <div class="brand-text-box">
+          <span class="brand-title">NOSTRA<span class="brand-accent">TV</span></span>
+          <span class="brand-subtitle">PREMIUM IPTV</span>
+        </div>
+      </div>
+
+      <div class="header-status" id="header-status-area">
+        <div id="active-playlist-badge" class="playlist-pill pill-inactive">
+          <span class="status-dot"></span>
+          <span id="active-playlist-name">Sin Playlist</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- Quick Action Buttons -->
+        <button id="btn-header-sync" class="header-btn focusable" data-action="open-sync" title="Subir con QR / PIN">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+            <path d="M3 14h3v3H3zM7 17h3v4H7zM3 18h4v3H3z"/>
+          </svg>
+          <span>QR / PIN</span>
+        </button>
+
+        <button id="btn-header-reload" class="header-btn focusable" data-action="reload-playlist" title="Recargar Playlist">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+        </button>
+
+        <button id="btn-header-settings" class="header-btn focusable" data-action="open-settings" title="Ajustes">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+
+        <!-- Large Date / Time -->
+        <div class="clock-display">
+          <div id="clock-time" class="clock-time">00:00:00</div>
+          <div id="clock-date" class="clock-date">Jue, 06 Ago</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN CONTENT AREA -->
+    <main id="main-content" class="main-viewport">
+
+      <!-- VIEW 1: HOME SCREEN (TiviPlayer Minimal Style) -->
+      <section id="view-home" class="view-panel active">
+        <div class="home-hero">
+          <h1 class="home-welcome">Bienvenido a <span class="text-gradient">NOSTRA TV</span></h1>
+          <p class="home-subtitle">Selecciona una sección o gestiona tus listas de reproducción</p>
+        </div>
+
+        <!-- 4 Large Main Tiles -->
+        <div class="home-tiles-grid">
+          
+          <!-- Tile 1: TV en Vivo -->
+          <div id="tile-live" class="home-tile focusable" data-action="open-section" data-section="live" tabindex="0">
+            <div class="tile-icon-bg icon-live">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="7" width="20" height="13" rx="2" ry="2"/>
+                <polyline points="17 2 12 7 7 2"/>
+              </svg>
+            </div>
+            <div class="tile-content">
+              <span class="tile-tag">EN DIRECTO</span>
+              <h2 class="tile-title">TV en Vivo</h2>
+              <p class="tile-desc">Canales en directo con soporte PIP, EPG y Guía</p>
+              <div class="tile-meta">
+                <span id="home-count-live" class="badge-meta">0 Canales</span>
+              </div>
+            </div>
+            <div class="tile-arrow">➔</div>
+          </div>
+
+          <!-- Tile 2: Películas -->
+          <div id="tile-vod" class="home-tile focusable" data-action="open-section" data-section="vod" tabindex="0">
+            <div class="tile-icon-bg icon-vod">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="18" rx="2"/>
+                <line x1="7" y1="3" x2="7" y2="21"/>
+                <line x1="17" y1="3" x2="17" y2="21"/>
+                <line x1="2" y1="9" x2="22" y2="9"/>
+                <line x1="2" y1="15" x2="22" y2="15"/>
+              </svg>
+            </div>
+            <div class="tile-content">
+              <span class="tile-tag">CINE / VOD</span>
+              <h2 class="tile-title">Películas</h2>
+              <p class="tile-desc">Catálogo de cine bajo demanda con resumen de posición</p>
+              <div class="tile-meta">
+                <span id="home-count-vod" class="badge-meta">0 Películas</span>
+              </div>
+            </div>
+            <div class="tile-arrow">➔</div>
+          </div>
+
+          <!-- Tile 3: Series -->
+          <div id="tile-series" class="home-tile focusable" data-action="open-section" data-section="series" tabindex="0">
+            <div class="tile-icon-bg icon-series">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 11a9 9 0 0 1 9 9"/>
+                <path d="M4 4a16 16 0 0 1 16 16"/>
+                <circle cx="5" cy="19" r="1"/>
+              </svg>
+            </div>
+            <div class="tile-content">
+              <span class="tile-tag">TEMPORADAS</span>
+              <h2 class="tile-title">Series</h2>
+              <p class="tile-desc">Temporadas y episodios completos (Xtream / Stalker)</p>
+              <div class="tile-meta">
+                <span id="home-count-series" class="badge-meta">0 Series</span>
+              </div>
+            </div>
+            <div class="tile-arrow">➔</div>
+          </div>
+
+          <!-- Tile 4: Playlists -->
+          <div id="tile-playlists" class="home-tile focusable" data-action="open-section" data-section="playlists" tabindex="0">
+            <div class="tile-icon-bg icon-playlists">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                <line x1="12" y1="11" x2="12" y2="17"/>
+                <line x1="9" y1="14" x2="15" y2="14"/>
+              </svg>
+            </div>
+            <div class="tile-content">
+              <span class="tile-tag">CONFIGURACIÓN</span>
+              <h2 class="tile-title">Playlists</h2>
+              <p class="tile-desc">Gestionar M3U, Xtream Codes y MAC Stalker</p>
+              <div class="tile-meta">
+                <span id="home-count-playlists" class="badge-meta">0 Listas Configuradas</span>
+              </div>
+            </div>
+            <div class="tile-arrow">➔</div>
+          </div>
+
+        </div>
+
+        <!-- Quick Info bar -->
+        <div class="home-info-bar">
+          <div class="info-item">
+            <span class="info-label">Lista Activa:</span>
+            <span id="info-active-name" class="info-val">Ninguna</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Tipo de Conexión:</span>
+            <span id="info-active-type" class="info-val">M3U / Xtream / MAC Stalker</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Expiración:</span>
+            <span id="info-active-exp" class="info-val">--</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: CONTENT SECTION VIEW (LIVE TV, VOD, SERIES) -->
+      <section id="view-section" class="view-panel">
+        
+        <!-- Sidebar: Categories & Filters -->
+        <aside id="sidebar-categories" class="sidebar-panel">
+          <div class="sidebar-header">
+            <button id="btn-back-home" class="btn-sidebar-back focusable" data-action="go-home">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+              <span>Inicio</span>
+            </button>
+            <h2 id="section-title" class="sidebar-title">TV en Vivo</h2>
+          </div>
+
+          <!-- Search Input Box -->
+          <div class="search-box">
+            <input type="text" id="search-input" class="search-field focusable"
+              placeholder="Buscar..." readonly
+              onclick="this.removeAttribute('readonly'); this.focus();"
+              onblur="this.setAttribute('readonly','readonly')" />
+          </div>
+
+          <!-- Categories List -->
+          <div class="categories-container">
+            <div id="category-list" class="category-list">
+              <!-- Dynamically filled -->
+            </div>
+          </div>
+        </aside>
+
+        <!-- Main Content Area: Channels / Movies Grid -->
+        <div class="content-viewport">
+          <div class="content-topbar">
+            <div class="section-breadcrumbs">
+              <span id="breadcrumb-category" class="crumb-cat">Todas las Categorías</span>
+              <span id="breadcrumb-count" class="crumb-count">(0 elementos)</span>
+            </div>
+
+            <div class="content-status-pills">
+              <span id="pill-sort-status" class="status-badge">Orden: A-Z</span>
+              <span id="pill-filter-status" class="status-badge">Todas</span>
+            </div>
+          </div>
+
+          <!-- Grid Container -->
+          <div id="media-grid" class="media-grid">
+            <!-- Dynamically populated media cards -->
+          </div>
+
+          <!-- Empty state placeholder -->
+          <div id="empty-grid-msg" class="empty-state hidden">
+            <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <h3>No se encontraron resultados</h3>
+            <p>Prueba a cambiar el filtro de categorías o la búsqueda.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: PLAYLIST MANAGER MODAL -->
+      <section id="view-playlists" class="view-panel">
+        <div class="playlist-manager-container">
+          <div class="manager-header">
+            <div style="display:flex; align-items:center; gap:15px;">
+              <button class="btn-sidebar-back focusable" data-action="go-home">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                <span>Volver</span>
+              </button>
+              <h2>Gestión de Playlists IPTV</h2>
+            </div>
+            <button id="btn-add-playlist" class="btn-primary focusable" data-action="open-add-modal">+ Añadir Nueva Playlist</button>
+          </div>
+
+          <!-- Playlists Table / Card List -->
+          <div class="playlists-cards-grid" id="playlists-list-container">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- PIP MINI PLAYER CONTAINER (Bottom Right) -->
+    <div id="pip-container" class="pip-wrapper hidden">
+      <div class="pip-video-box">
+        <video id="pip-video" autoplay muted></video>
+        <div class="pip-overlay">
+          <span id="pip-channel-name" class="pip-title">Canal en PIP</span>
+          <div class="pip-controls">
+            <button id="btn-pip-expand" class="pip-btn focusable" title="Pantalla Completa">⛶</button>
+            <button id="btn-pip-close" class="pip-btn focusable" title="Cerrar PIP">✕</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FULLSCREEN VIDEO PLAYER OVERLAY -->
+    <div id="player-overlay" class="player-overlay hidden">
+      <video id="main-video" class="video-element" autoplay crossorigin="anonymous"></video>
+
+      <!-- Stream Loading / Buffering Spinner -->
+      <div id="player-spinner" class="player-spinner hidden">
+        <div class="spinner-ring"></div>
+        <span id="player-spinner-text">Cargando emisión...</span>
+      </div>
+
+      <!-- Auto-Replay Reconecting Toast -->
+      <div id="replay-toast" class="replay-toast hidden">
+        <div class="toast-pulse"></div>
+        <span id="replay-toast-msg">Reconectando transmisión (intento 1/5)...</span>
+      </div>
+
+      <!-- Full Player OSD (On Screen Display) -->
+      <div id="player-osd" class="player-osd">
+        <!-- OSD Top Bar -->
+        <div class="osd-top">
+          <div class="osd-channel-info">
+            <span id="osd-channel-num" class="osd-num">001</span>
+            <img id="osd-channel-logo" src="" class="osd-logo hidden" alt="Logo" />
+            <div class="osd-name-box">
+              <h2 id="osd-channel-title" class="osd-title">Nombre del Canal</h2>
+              <span id="osd-channel-group" class="osd-group">Categoría</span>
+            </div>
+          </div>
+
+          <div class="osd-top-right">
+            <span id="osd-quality-badge" class="badge-quality">FHD / HLS</span>
+            <span id="osd-clock" class="osd-clock">18:00</span>
+          </div>
+        </div>
+
+        <!-- EPG / Progress Bar in OSD -->
+        <div class="osd-epg-box">
+          <div class="epg-row-now">
+            <span class="epg-label">AHORA:</span>
+            <span id="osd-epg-now-title" class="epg-show-title">Programa en emisión</span>
+            <span id="osd-epg-now-time" class="epg-show-time">18:00 - 19:00</span>
+          </div>
+          <div class="epg-progress-bar">
+            <div id="osd-epg-progress" class="epg-progress-fill" style="width: 45%;"></div>
+          </div>
+          <div class="epg-row-next">
+            <span class="epg-label">LUEGO:</span>
+            <span id="osd-epg-next-title" class="epg-show-title">Siguiente programa</span>
+            <span id="osd-epg-next-time" class="epg-show-time">19:00 - 20:00</span>
+          </div>
+        </div>
+
+        <!-- Timeline Seek Bar for VOD & Seekable Media -->
+        <div id="vod-timeline-container" class="vod-timeline">
+          <span id="vod-time-current">00:00:00</span>
+          <input type="range" id="vod-seek-bar" class="vod-range focusable" min="0" max="100" value="0" step="0.1" />
+          <span id="vod-time-total">00:00:00</span>
+        </div>
+
+        <!-- OSD Bottom Player Toolbar Controls -->
+        <div class="osd-controls">
+          <div class="osd-btn-group main-controls">
+            <button id="btn-rewind-10" class="osd-btn focusable" data-action="rewind" title="Retroceder 10s">⏮ -10s</button>
+            <button id="btn-play-pause" class="osd-btn focusable" data-action="toggle-play" title="Reproducir / Pausa">⏯️ Pausa</button>
+            <button id="btn-stop-player" class="osd-btn focusable" data-action="stop-player" title="Detener">⏹️ Stop</button>
+            <button id="btn-forward-10" class="osd-btn focusable" data-action="forward" title="Avanzar 10s">⏭ +10s</button>
+          </div>
+
+          <div class="osd-btn-group">
+            <button id="btn-audio-tracks" class="osd-btn focusable" data-action="select-audio" title="Audio">🔊 Audio</button>
+            <button id="btn-sub-tracks" class="osd-btn focusable" data-action="select-sub" title="Subtítulos">💬 Subtítulos</button>
+            <button id="btn-aspect-ratio" class="osd-btn focusable" data-action="toggle-aspect" title="Aspect Ratio">📺 16:9</button>
+            <button id="btn-player-fav" class="osd-btn focusable" data-action="toggle-fav" title="Favorito">❤️ Favorito</button>
+            <button id="btn-close-player" class="osd-btn focusable" data-action="close-player" title="Cerrar Player">✕ Salir</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: AUDIO / SUBTITLE TRACK PICKER -->
+    <div id="modal-track-picker" class="modal-backdrop hidden">
+      <div class="modal-window window-small">
+        <div class="modal-header">
+          <h3 id="track-picker-title">Seleccionar Pista</h3>
+          <button class="btn-close-modal focusable" data-action="close-modal">✕</button>
+        </div>
+        <div id="track-picker-options" class="category-checkboxes-list" style="margin:20px 0;">
+          <!-- Dynamically populated track options -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary focusable" data-action="close-modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: ADD / EDIT PLAYLIST (3 MODES) -->
+    <div id="modal-playlist-form" class="modal-backdrop hidden">
+      <div class="modal-window">
+        <div class="modal-header">
+          <h3 id="modal-form-title">Añadir Nueva Lista IPTV</h3>
+          <button class="btn-close-modal focusable" data-action="close-modal">✕</button>
+        </div>
+
+        <!-- Mode Selector Tabs -->
+        <div class="tab-selector">
+          <button class="tab-btn active focusable" data-mode="m3u">M3U / M3U8</button>
+          <button class="tab-btn focusable" data-mode="xtream">Xtream Codes</button>
+          <button class="tab-btn focusable" data-mode="stalker">MAC Stalker Portal</button>
+        </div>
+
+        <form id="form-playlist" onsubmit="return false;">
+          <input type="hidden" id="form-playlist-id" value="" />
+          <input type="hidden" id="form-playlist-mode" value="m3u" />
+
+          <!-- Common Name Field -->
+          <div class="form-group">
+            <label for="input-playlist-name">Nombre de la Lista:</label>
+            <input type="text" id="input-playlist-name" class="form-control focusable" placeholder="Ej. Mi Servidor Premium" required />
+          </div>
+
+          <!-- M3U Form Fields -->
+          <div id="fields-m3u" class="mode-fields-group">
+            <div class="form-group">
+              <label for="input-m3u-url">URL de Lista M3U / M3U8:</label>
+              <input type="url" id="input-m3u-url" class="form-control focusable" placeholder="https://ejemplo.com/lista.m3u" />
+            </div>
+            <div class="form-group">
+              <label for="input-m3u-epg">URL de EPG (Opcional):</label>
+              <input type="url" id="input-m3u-epg" class="form-control focusable" placeholder="https://ejemplo.com/epg.xml.gz" />
+            </div>
+          </div>
+
+          <!-- Xtream Codes Form Fields -->
+          <div id="fields-xtream" class="mode-fields-group hidden">
+            <div class="form-group">
+              <label for="input-xtream-host">Servidor / URL Host:</label>
+              <input type="url" id="input-xtream-host" class="form-control focusable" placeholder="http://servidor.com:8080" />
+            </div>
+            <div class="form-group row-2">
+              <div>
+                <label for="input-xtream-user">Usuario:</label>
+                <input type="text" id="input-xtream-user" class="form-control focusable" placeholder="Usuario" />
+              </div>
+              <div>
+                <label for="input-xtream-pass">Contraseña:</label>
+                <input type="password" id="input-xtream-pass" class="form-control focusable" placeholder="Contraseña" />
+              </div>
+            </div>
+          </div>
+
+          <!-- MAC Stalker Form Fields -->
+          <div id="fields-stalker" class="mode-fields-group hidden">
+            <div class="form-group">
+              <label for="input-stalker-url">URL del Portal Stalker:</label>
+              <input type="url" id="input-stalker-url" class="form-control focusable" placeholder="http://portal.servidor.com/c/" />
+            </div>
+            <div class="form-group">
+              <label for="input-stalker-mac">Dirección MAC (00:1A:79:...):</label>
+              <input type="text" id="input-stalker-mac" class="form-control focusable" placeholder="00:1A:79:XX:XX:XX" />
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button id="btn-save-playlist" class="btn-primary focusable" data-action="save-playlist">Guardar Playlist</button>
+            <button class="btn-secondary focusable" data-action="close-modal">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: QR / PIN REMOTE UPLOAD -->
+    <div id="modal-qr-sync" class="modal-backdrop hidden">
+      <div class="modal-window window-sync">
+        <div class="modal-header">
+          <h3>Subir Playlist vía QR / PIN desde Móvil o PC</h3>
+          <button class="btn-close-modal focusable" data-action="close-modal">✕</button>
+        </div>
+        
+        <div class="sync-body">
+          <div class="sync-left">
+            <div id="qr-code-box" class="qr-code-box">
+              <div class="qr-placeholder">Cargando Código QR...</div>
+            </div>
+            <span class="qr-hint">Escanea con la cámara de tu móvil</span>
+          </div>
+
+          <div class="sync-right">
+            <div class="pin-box">
+              <span class="pin-label">CÓDIGO PIN DE EMPAREJAMIENTO:</span>
+              <div id="sync-pin-code" class="pin-display">849-201</div>
+            </div>
+            <p class="sync-instructions">
+              1. Escanea el código QR con la cámara de tu móvil o entra en la URL de abajo.<br>
+              2. Introduce el código PIN que se muestra a la izquierda.<br>
+              3. Rellena los datos de tu M3U, Xtream o Stalker MAC y pulsa Enviar.<br>
+              4. ¡La lista se subirá directamente a la TV a través de la nube!
+            </p>
+            <div style="margin-top:15px; font-size:14px; background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; word-break:break-all;">
+              <strong>URL del sincronizador:</strong><br>
+              <span id="sync-web-url" style="color:var(--accent-cyan); font-family:monospace;">https://naimmeliana-prog.github.io/NostraTV/sync.html</span>
+            </div>
+            <div id="sync-status" class="sync-status-msg" style="margin-top:15px;">Esperando transmisión desde tu móvil...</div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-secondary focusable" data-action="close-modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: RESUME VOD DIALOG -->
+    <div id="modal-resume-vod" class="modal-backdrop hidden">
+      <div class="modal-window window-small">
+        <div class="modal-header">
+          <h3>Continuar Reproducción</h3>
+        </div>
+        <div class="modal-body">
+          <p id="resume-vod-msg">Detectada posición anterior en <strong id="resume-time-text">00:42:15</strong>.</p>
+          <p>¿Cómo deseas reproducir el contenido?</p>
+        </div>
+        <div class="modal-footer flex-col">
+          <button id="btn-resume-yes" class="btn-primary focusable" data-action="confirm-resume">Continuar desde <span id="resume-btn-time">00:42:15</span></button>
+          <button id="btn-resume-no" class="btn-secondary focusable" data-action="restart-vod">Empezar desde el principio</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: SERIES SEASONS & EPISODES -->
+    <div id="modal-series-detail" class="modal-backdrop hidden">
+      <div class="modal-window window-large">
+        <div class="modal-header">
+          <h3 id="series-detail-title">Nombre de la Serie</h3>
+          <button class="btn-close-modal focusable" data-action="close-modal">✕</button>
+        </div>
+        
+        <div class="series-meta-banner">
+          <img id="series-poster" src="" alt="Poster" class="series-poster-img hidden" />
+          <div class="series-info-text">
+            <p id="series-plot" class="series-plot-text">Sinopsis de la serie...</p>
+            <div id="series-meta-tags" class="series-tags">
+              <span id="tag-series-genre" class="badge-tag">Drama</span>
+              <span id="tag-series-year" class="badge-tag">2024</span>
+              <span id="tag-series-rating" class="badge-tag">★ 8.5</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Seasons Tabs -->
+        <div id="seasons-tab-bar" class="seasons-tab-bar">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Episodes Grid/List -->
+        <div id="episodes-list-container" class="episodes-grid">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: CATEGORY FILTER SELECTOR (BLUE KEY SHORTCUT) -->
+    <div id="modal-category-filter" class="modal-backdrop hidden">
+      <div class="modal-window window-medium">
+        <div class="modal-header">
+          <h3>Filtrar Categorías</h3>
+          <button class="btn-close-modal focusable" data-action="close-modal">✕</button>
+        </div>
+        <div class="filter-actions-bar">
+          <button id="btn-cat-select-all" class="btn-small focusable" data-action="cat-select-all">✓ Seleccionar Todo</button>
+          <button id="btn-cat-deselect-all" class="btn-small focusable" data-action="cat-deselect-all">✕ Ninguna</button>
+        </div>
+        <div id="category-filter-checkboxes" class="category-checkboxes-list">
+          <!-- Dynamically populated category checkboxes -->
+        </div>
+        <div class="modal-footer">
+          <button id="btn-apply-category-filter" class="btn-primary focusable" data-action="apply-cat-filter">Aplicar Filtros</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- COLOR KEYS FOOTER (REMOTE SHORTCUTS) -->
+    <footer id="remote-color-bar" class="color-keys-bar">
+      <div class="color-key-item key-red" id="key-red-btn">
+        <span class="key-circle red"></span>
+        <span class="key-label">ROJO: <strong id="lbl-key-red">Favoritos (+/-)</strong></span>
+      </div>
+      <div class="color-key-item key-green" id="key-green-btn">
+        <span class="key-circle green"></span>
+        <span class="key-label">VERDE: <strong>Últimos Vistos</strong></span>
+      </div>
+      <div class="color-key-item key-yellow" id="key-yellow-btn">
+        <span class="key-circle yellow"></span>
+        <span class="key-label">AMARILLO: <strong id="lbl-key-yellow">Ordenar</strong></span>
+      </div>
+      <div class="color-key-item key-blue" id="key-blue-btn">
+        <span class="key-circle blue"></span>
+        <span class="key-label">AZUL: <strong>Filtrar Categorías</strong></span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- APPLICATION SCRIPTS -->
+  <script src="js/storage.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/epg.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/focus.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/qr_sync.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
