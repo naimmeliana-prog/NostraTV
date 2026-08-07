@@ -231,11 +231,9 @@ class ApiEngine {
         }
       }
     }
-
     // Direct fetch (works on webOS TV native, fails on browser due to CORS)
-    let cookie = `mac=${mac}; stb_lang=en; timezone=Europe/London`;
-    if (token) cookie += `; token=${token}`;
-
+    let cookie = `mac=${encodeURIComponent(mac)}; stb_lang=en; timezone=Europe/London`;
+    if (token) cookie += `; token=${encodeURIComponent(token)}`;
     let host = '';
     let referer = '';
     let origin = '';
