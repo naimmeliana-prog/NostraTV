@@ -282,18 +282,18 @@ class ApiEngine {
   // STALKER HANDSHAKE — supports simple and prehash token handshakes
   // =========================================================================
   async _stalkerHandshake(baseUrl, mac, proxy = '') {
-    const cleanBase = baseUrl.trim().replace(/\/+$/, '');
+    let cleanBase = baseUrl.trim().replace(/\/+$/, '');
     
     // Normalize and determine the primary candidate path directly
     let primaryEp = '';
     if (cleanBase.endsWith('load.php')) {
       primaryEp = cleanBase;
     } else if (cleanBase.endsWith('/c')) {
+      cleanBase = cleanBase.substring(0, cleanBase.length - 2);
       primaryEp = cleanBase + '/server/load.php';
     } else {
       primaryEp = cleanBase + '/server/load.php';
     }
-
     // Build the ordered list of candidates. We try the normalized URL first to avoid security bans!
     const candidates = [primaryEp];
     for (const ep of STALKER_ENTRY_POINTS) {

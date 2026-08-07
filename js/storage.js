@@ -34,7 +34,7 @@ class StorageManager {
           addedAt: new Date().toISOString(),
           status: 'active',
           stalkerConfig: {
-            portalUrl: 'http://mag.greatott.me:80/c/',
+            portalUrl: 'http://mag.greatott.me:80',
             mac: '00:1A:79:74:B1:B9',
             proxy: ''
           }
