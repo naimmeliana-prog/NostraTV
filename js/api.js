@@ -801,6 +801,95 @@ class ApiEngine {
   }
 
   // =========================================================================
+  // STALKER PLAYBACK LINK RESOLUTION
+  // =========================================================================
+  async createStalkerLink(portalUrl, entry, mac, token, cmd, type = 'itv', seriesNum = null, proxy = '') {
+    let currentToken = token;
+    
+    const requestLink = async (t) => {
+      const data = await this._stalkerReq(portalUrl, entry, mac, t, {
+        type: type,
+        action: 'create_link',
+        cmd: cmd
+      }, proxy);
+      
+      let link = '';
+      if (data) {
+        if (typeof data === 'string') link = data;
+        else if (data.cmd) link = data.cmd;
+        else if (data.js) {
+          if (typeof data.js === 'string') link = data.js;
+          else if (data.js.cmd) link = data.js.cmd;
+        } else if (data.result) {
+          if (typeof data.result === 'string') link = data.result;
+          else if (data.result.cmd) link = data.result.cmd;
+        }
+      }
+      
+      if (link) {
+        link = link.trim().replace(/^ffmpeg\s*/i, '');
+        const httpIdx = link.indexOf('http');
+        if (httpIdx !== -1) {
+          link = link.substring(httpIdx);
+          if (link.includes('localhost') || link.includes('127.0.0.1')) {
+            try {
+              const u = new URL(portalUrl);
+              link = link.replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/, u.origin);
+            } catch(e) {}
+          }
+        } else {
+          try {
+            const u = new URL(portalUrl);
+            const streamBaseUrl = `${u.protocol}//${u.host}/vod4`;
+            link = `${streamBaseUrl}/${link.replace(/^\/+/, '')}`;
+          } catch (e) {}
+        }
+
+        const spaceIdx = link.indexOf(' ');
+        if (spaceIdx !== -1) {
+          link = link.substring(0, spaceIdx);
+        }
+
+        // Fix empty stream parameter if stripped by Stalker portal (e.g., mag.greatott.me)
+        if (link.includes('stream=&') || link.endsWith('stream=')) {
+          let match = cmd.match(/[&?]stream=([0-9a-zA-Z_]+)/);
+          let streamId = match ? match[1] : null;
+          if (!streamId) {
+            const cleanCmd = cmd.replace(/\.(ts|mp4|mpg|mpeg|mkv|avi|mov|wmv|flv|webm)$/i, '');
+            const idMatch = cleanCmd.match(/(\d+)\D*$/);
+            if (idMatch) streamId = idMatch[1];
+          }
+          if (!streamId && cmd.includes('ch_id=')) {
+            let chMatch = cmd.match(/ch_id=(\d+)/);
+            if (chMatch) streamId = chMatch[1];
+          }
+          if (streamId) {
+            link = link.replace('stream=', `stream=${streamId}`);
+          }
+        }
+      }
+      return link;
+    };
+
+    try {
+      const link = await requestLink(currentToken);
+      if (link) return link;
+    } catch (e) {
+      if (window.appLog) window.appLog(`createStalkerLink error: ${e.message}`, '#eab308');
+    }
+
+    // Fallback: reload portal token and retry
+    try {
+      const authData = await this.loadStalkerPortal(portalUrl, mac, proxy);
+      if (authData && authData.stalkerConfig && authData.stalkerConfig.token) {
+        return await requestLink(authData.stalkerConfig.token);
+      }
+    } catch(e) {}
+
+    return '';
+  }
+
+  // =========================================================================
   // HELPERS
   // =========================================================================
   _cleanCmd(raw) {
