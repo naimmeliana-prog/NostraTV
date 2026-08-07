@@ -84,11 +84,36 @@ class ApiEngine {
                     window.location.hostname.startsWith('192.168.') ||
                     window.location.hostname.startsWith('10.');
 
+    const isTV = navigator.userAgent.toLowerCase().includes('webos') || 
+                 window.location.protocol === 'file:';
+
+    // Append mac and token to the URL query string if they are not already there
+    // This is required for browsers/engines that strip the Cookie header on direct fetch
+    let targetUrl = url;
+    try {
+      const parsedUrl = new URL(targetUrl);
+      let changed = false;
+      if (mac && !parsedUrl.searchParams.has('mac')) {
+        parsedUrl.searchParams.set('mac', mac);
+        changed = true;
+      }
+      if (token && !parsedUrl.searchParams.has('token')) {
+        parsedUrl.searchParams.set('token', token);
+        changed = true;
+      }
+      if (changed) {
+        targetUrl = parsedUrl.toString();
+      }
+    } catch (e) {}
+
     // Determine active proxy
     let activeProxy = proxyUrl;
     if (!activeProxy) {
       if (isLocal && window.location.protocol.startsWith('http')) {
         activeProxy = `${window.location.origin}/api/stalker-proxy`;
+      } else if (isTV) {
+        // Packaged WebOS App runs natively and can bypass CORS directly. No proxy needed!
+        activeProxy = '';
       } else {
         activeProxy = CF_WORKER_URL;
       }
@@ -96,8 +121,8 @@ class ApiEngine {
 
     // Try with proxy
     if (activeProxy) {
-      const proxyTarget = `${activeProxy.replace(/\/$/, '')}?url=${encodeURIComponent(url)}&mac=${encodeURIComponent(mac)}&token=${encodeURIComponent(token || '')}`;
-      if (window.appLog) window.appLog(`[Proxy] ${activeProxy.split('/')[2]} → ${url.substring(0, 35)}...`, '#eab308');
+      const proxyTarget = `${activeProxy.replace(/\/$/, '')}?url=${encodeURIComponent(targetUrl)}&mac=${encodeURIComponent(mac)}&token=${encodeURIComponent(token || '')}`;
+      if (window.appLog) window.appLog(`[Proxy] ${activeProxy.split('/')[2]} → ${targetUrl.substring(0, 35)}...`, '#eab308');
       try {
         const r = await fetch(proxyTarget, { method: 'GET', cache: 'no-cache' });
         if (!r.ok) {
@@ -133,9 +158,9 @@ class ApiEngine {
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    if (window.appLog) window.appLog(`[Direct] ${url.substring(0, 50)}`, '#94a3b8');
-    const r = await fetch(url, { method: 'GET', headers, cache: 'no-cache' });
-    if (!r.ok) throw new Error(`HTTP ${r.status} directo para ${url}`);
+    if (window.appLog) window.appLog(`[Direct] ${targetUrl.substring(0, 50)}`, '#94a3b8');
+    const r = await fetch(targetUrl, { method: 'GET', headers, cache: 'no-cache' });
+    if (!r.ok) throw new Error(`HTTP ${r.status} directo para ${targetUrl}`);
     const text = await r.text();
     try {
       return JSON.parse(text);
