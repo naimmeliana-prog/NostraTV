@@ -284,12 +284,34 @@ class ApiEngine {
   // STALKER HANDSHAKE — supports simple and prehash token handshakes
   // =========================================================================
   async _stalkerHandshake(baseUrl, mac, proxy = '') {
+    const cleanBase = baseUrl.trim().replace(/\/+$/, '');
+    
+    // Normalize and determine the primary candidate path directly
+    let primaryEp = '';
+    if (cleanBase.endsWith('load.php')) {
+      primaryEp = cleanBase;
+    } else if (cleanBase.endsWith('/c')) {
+      primaryEp = cleanBase + '/server/load.php';
+    } else {
+      primaryEp = cleanBase + '/server/load.php';
+    }
+
+    // Build the ordered list of candidates. We try the normalized URL first to avoid security bans!
+    const candidates = [primaryEp];
     for (const ep of STALKER_ENTRY_POINTS) {
-      if (window.appLog) window.appLog(`Handshake: ${ep}`, '#94a3b8');
+      const candidate = `${cleanBase}${ep}`;
+      if (candidate !== primaryEp && !candidates.includes(candidate)) {
+        candidates.push(candidate);
+      }
+    }
+
+    for (const targetUrl of candidates) {
+      const displayPath = targetUrl.replace(cleanBase, '');
+      if (window.appLog) window.appLog(`Handshake: ${displayPath}`, '#94a3b8');
       
       // Try Simple handshake first
       try {
-        const url = `${baseUrl}${ep}?type=stb&action=handshake&mac=${mac}&JsHttpRequest=1-xml`;
+        const url = `${targetUrl}?type=stb&action=handshake&mac=${mac}&JsHttpRequest=1-xml`;
         const data = await this._stalkerFetch(url, mac, null, proxy);
         const js = this._js(data);
         const token = (js && js.token) ? js.token : null;
@@ -301,20 +323,21 @@ class ApiEngine {
         localStorage.setItem(`nostratv_stalker_random_${mac}`, randomVal.toLowerCase());
         
         if (token) {
-          if (window.appLog) window.appLog(`✓ Token simple OK (${ep}): ${token.substring(0, 12)}...`, '#22c55e');
-          return { entry: ep, token };
+          if (window.appLog) window.appLog(`✓ Token simple OK (${displayPath}): ${token.substring(0, 12)}...`, '#22c55e');
+          const entry = targetUrl.replace(cleanBase, '');
+          return { entry, token };
         }
       } catch(e) {
-        if (window.appLog) window.appLog(`Simple ${ep} falló: ${e.message}`, '#94a3b8');
+        if (window.appLog) window.appLog(`Simple ${displayPath} falló: ${e.message}`, '#94a3b8');
       }
 
-      // Try Alternative token/prehash handshake (old Stalker method)
+      // Try Alternative token/prehash handshake
       try {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         const randomToken = Array.from({length:32}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
         const prehash = (await CryptoHelpers.sha1(randomToken)).toLowerCase();
         
-        const url = `${baseUrl}${ep}?type=stb&action=handshake&mac=${mac}&token=${randomToken}&prehash=${prehash}&JsHttpRequest=1-xml`;
+        const url = `${targetUrl}?type=stb&action=handshake&mac=${mac}&token=${randomToken}&prehash=${prehash}&JsHttpRequest=1-xml`;
         const data = await this._stalkerFetch(url, mac, null, proxy);
         const js = this._js(data);
         const token = (js && js.token) ? js.token : null;
@@ -326,11 +349,12 @@ class ApiEngine {
         localStorage.setItem(`nostratv_stalker_random_${mac}`, randomVal.toLowerCase());
 
         if (token) {
-          if (window.appLog) window.appLog(`✓ Token prehash OK (${ep}): ${token.substring(0, 12)}...`, '#22c55e');
-          return { entry: ep, token };
+          if (window.appLog) window.appLog(`✓ Token prehash OK (${displayPath}): ${token.substring(0, 12)}...`, '#22c55e');
+          const entry = targetUrl.replace(cleanBase, '');
+          return { entry, token };
         }
       } catch(e) {
-        if (window.appLog) window.appLog(`Prehash ${ep} falló: ${e.message}`, '#ef4444');
+        if (window.appLog) window.appLog(`Prehash ${displayPath} falló: ${e.message}`, '#ef4444');
       }
     }
     throw new Error(`Handshake fallido en todos los endpoints de ${baseUrl}`);
