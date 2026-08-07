@@ -335,7 +335,9 @@ class ApiEngine {
 
   _js(data) {
     if (data && typeof data === 'object') {
-      return data.js !== undefined ? data.js : data;
+      if (data.js !== undefined) return data.js;
+      if (data.result !== undefined) return data.result;
+      return data;
     }
     return {};
   }
@@ -373,10 +375,22 @@ class ApiEngine {
       try {
         const url = `${targetUrl}?type=stb&action=handshake&mac=${encodeURIComponent(mac)}&JsHttpRequest=1-xml`;
         const data = await this._stalkerFetch(url, mac, null, proxy);
-        const js = this._js(data);
-        const token = (js && js.token) ? js.token : null;
         
-        let randomVal = (js && js.random) || '';
+        let token = '';
+        let randomVal = '';
+        if (data) {
+          if (data.js && data.js.token) {
+            token = data.js.token;
+            randomVal = data.js.random || '';
+          } else if (data.result && data.result.token) {
+            token = data.result.token;
+            randomVal = data.result.random || '';
+          } else if (data.token) {
+            token = data.token;
+            randomVal = data.random || '';
+          }
+        }
+        
         if (!randomVal) {
           randomVal = Array.from({length:40}, () => Math.floor(Math.random()*16).toString(16)).join('');
         }
@@ -399,10 +413,22 @@ class ApiEngine {
         
         const url = `${targetUrl}?type=stb&action=handshake&mac=${encodeURIComponent(mac)}&token=${randomToken}&prehash=${prehash}&JsHttpRequest=1-xml`;
         const data = await this._stalkerFetch(url, mac, null, proxy);
-        const js = this._js(data);
-        const token = (js && js.token) ? js.token : null;
         
-        let randomVal = (js && js.random) || '';
+        let token = '';
+        let randomVal = '';
+        if (data) {
+          if (data.js && data.js.token) {
+            token = data.js.token;
+            randomVal = data.js.random || '';
+          } else if (data.result && data.result.token) {
+            token = data.result.token;
+            randomVal = data.result.random || '';
+          } else if (data.token) {
+            token = data.token;
+            randomVal = data.random || '';
+          }
+        }
+        
         if (!randomVal) {
           randomVal = Array.from({length:40}, () => Math.floor(Math.random()*16).toString(16)).join('');
         }
