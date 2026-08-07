@@ -582,7 +582,6 @@ class ApiEngine {
       if (window.appLog) window.appLog(`ITV: ${genres.length} géneros`, '#94a3b8');
     } catch(e) {
       if (window.appLog) window.appLog(`ITV get_genres error: ${e.message}`, '#ef4444');
-      return [];
     }
 
     const items = [];
@@ -662,7 +661,6 @@ class ApiEngine {
       if (window.appLog) window.appLog(`VOD: ${cats.length} categorías`, '#94a3b8');
     } catch(e) {
       if (window.appLog) window.appLog(`VOD get_categories error: ${e.message}`, '#ef4444');
-      return [];
     }
 
     const items = [];
@@ -698,7 +696,6 @@ class ApiEngine {
       if (window.appLog) window.appLog(`Series: ${cats.length} categorías`, '#94a3b8');
     } catch(e) {
       if (window.appLog) window.appLog(`Series get_categories error: ${e.message}`, '#ef4444');
-      return [];
     }
 
     const items = [];
