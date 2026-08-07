@@ -261,7 +261,15 @@ class ApiEngine {
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     if (window.appLog) window.appLog(`[Direct] ${targetUrl.substring(0, 50)}`, '#94a3b8');
-    const r = await fetch(targetUrl, { method: 'GET', headers, cache: 'no-cache' });
+    let r = await fetch(targetUrl, { method: 'GET', headers, cache: 'no-cache' });
+    
+    // Handle 429 Too Many Requests — wait 3s and retry once
+    if (r.status === 429) {
+      if (window.appLog) window.appLog(`429 detectado. Esperando 3s y reintentando...`, '#eab308');
+      await new Promise(res => setTimeout(res, 3000));
+      r = await fetch(targetUrl, { method: 'GET', headers, cache: 'no-cache' });
+    }
+    
     if (!r.ok) throw new Error(`HTTP ${r.status} directo para ${targetUrl}`);
     const text = await r.text();
     try {
@@ -533,18 +541,20 @@ class ApiEngine {
     const entry = handshakeResult.entry;
     
     // Step 2: Upgraded Second Step Signature Auth
+    // Wait 1500ms before get_profile to avoid 429 rate-limiting (mirrors StreamVaultWebOS)
+    await new Promise(r => setTimeout(r, 1500));
     if (window.appLog) window.appLog('Firmando perfil dispositivo...', '#94a3b8');
     const { token, expDate } = await this._getUpgradedToken(base, entry, mac, handshakeResult.token, proxy);
     
-    // Antiflood wait
-    await new Promise(r => setTimeout(r, 600));
+    // Antiflood wait (1500ms like StreamVaultWebOS)
+    await new Promise(r => setTimeout(r, 1500));
 
     // Step 3: Load ITV, VOD, Series
     const live    = await this._loadStalkerITV(base, entry, mac, token, proxy);
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 1500));
     
     const vod     = await this._loadStalkerVOD(base, entry, mac, token, proxy);
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 1500));
     
     const series  = await this._loadStalkerSeries(base, entry, mac, token, proxy);
 
@@ -583,6 +593,9 @@ class ApiEngine {
     } catch(e) {
       if (window.appLog) window.appLog(`ITV get_genres error: ${e.message}`, '#ef4444');
     }
+
+    // Wait between genres and channel loading to avoid rate limiting
+    await new Promise(r => setTimeout(r, 1000));
 
     const items = [];
     
