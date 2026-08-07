@@ -65,8 +65,8 @@ export default {
     }
 
     // Build Stalker cookie
-    let cookie = `mac=${mac}; stb_lang=en; timezone=Europe/London`;
-    if (token) cookie += `; token=${token}`;
+    let cookie = `mac=${encodeURIComponent(mac)}; stb_lang=es; timezone=Europe/Madrid`;
+    if (token) cookie += `; token=${encodeURIComponent(token)}`;
 
     let host = parsedTarget.host;
     let referer = `${parsedTarget.protocol}//${parsedTarget.host}/c/`;

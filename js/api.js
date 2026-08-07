@@ -218,10 +218,10 @@ class ApiEngine {
         }
         const text = await r.text();
         try {
-          return JSON.parse(text);
+          return this._parseStalkerResponse(text, targetUrl);
         } catch(je) {
-          if (window.appLog) window.appLog(`JSON parse error: ${text.substring(0, 60)}`, '#ef4444');
-          throw new Error(`Invalid JSON from proxy: ${text.substring(0, 40)}`);
+          if (window.appLog) window.appLog(`Parse error: ${je.message}`, '#ef4444');
+          throw je;
         }
       } catch(e) {
         if (window.appLog) window.appLog(`Proxy falló: ${e.message}`, '#ef4444');
@@ -232,7 +232,7 @@ class ApiEngine {
       }
     }
     // Direct fetch (works on webOS TV native, fails on browser due to CORS)
-    let cookie = `mac=${encodeURIComponent(mac)}; stb_lang=en; timezone=Europe/London`;
+    let cookie = `mac=${encodeURIComponent(mac)}; stb_lang=es; timezone=Europe/Madrid`;
     if (token) cookie += `; token=${encodeURIComponent(token)}`;
     let host = '';
     let referer = '';
@@ -265,9 +265,71 @@ class ApiEngine {
     if (!r.ok) throw new Error(`HTTP ${r.status} directo para ${targetUrl}`);
     const text = await r.text();
     try {
-      return JSON.parse(text);
+      return this._parseStalkerResponse(text, targetUrl);
     } catch(je) {
-      throw new Error(`JSON inválido (${r.status}): ${text.substring(0, 60)}`);
+      throw je;
+    }
+  }
+
+  _parseStalkerResponse(text, url) {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      throw new Error("Respuesta vacía del servidor.");
+    }
+
+    // 1. Detect and parse XML
+    if (trimmed.startsWith('<')) {
+      try {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(trimmed, "application/xml");
+        
+        function xmlToJson(node) {
+          const obj = {};
+          const children = Array.from(node.childNodes).filter(n => n.nodeType === 1);
+          for (const child of children) {
+            const name = child.nodeName;
+            const value = xmlToJson(child);
+            if (obj[name]) {
+              if (!Array.isArray(obj[name])) obj[name] = [obj[name]];
+              obj[name].push(value);
+            } else {
+              obj[name] = value;
+            }
+          }
+          const textContent = node.textContent && node.textContent.trim();
+          if (children.length === 0 && textContent) {
+            return textContent;
+          }
+          return obj;
+        }
+        return xmlToJson(xmlDoc.documentElement);
+      } catch (e) {
+        throw new Error(`Error al parsear XML: ${e.message}`);
+      }
+    }
+
+    // 2. Clean JSON wrappers (js=, var js=, /* ... */)
+    let jsonStr = trimmed;
+    if (jsonStr.startsWith('js=')) {
+      jsonStr = jsonStr.slice(3);
+    } else if (jsonStr.startsWith('var js=')) {
+      jsonStr = jsonStr.slice(7);
+    }
+    
+    // Strip /* ... */ comments
+    if (jsonStr.includes('/*') && jsonStr.includes('*/')) {
+      const startIdx = jsonStr.indexOf('*/') + 2;
+      jsonStr = jsonStr.substring(startIdx).trim();
+    }
+    
+    if (jsonStr.endsWith(';')) {
+      jsonStr = jsonStr.slice(0, -1);
+    }
+
+    try {
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      throw new Error(`Error al parsear JSON Stalker: ${e.message}. Inicio: ${jsonStr.substring(0, 100)}`);
     }
   }
 
@@ -309,7 +371,7 @@ class ApiEngine {
       
       // Try Simple handshake first
       try {
-        const url = `${targetUrl}?type=stb&action=handshake&mac=${mac}&JsHttpRequest=1-xml`;
+        const url = `${targetUrl}?type=stb&action=handshake&mac=${encodeURIComponent(mac)}&JsHttpRequest=1-xml`;
         const data = await this._stalkerFetch(url, mac, null, proxy);
         const js = this._js(data);
         const token = (js && js.token) ? js.token : null;
@@ -335,7 +397,7 @@ class ApiEngine {
         const randomToken = Array.from({length:32}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
         const prehash = (await CryptoHelpers.sha1(randomToken)).toLowerCase();
         
-        const url = `${targetUrl}?type=stb&action=handshake&mac=${mac}&token=${randomToken}&prehash=${prehash}&JsHttpRequest=1-xml`;
+        const url = `${targetUrl}?type=stb&action=handshake&mac=${encodeURIComponent(mac)}&token=${randomToken}&prehash=${prehash}&JsHttpRequest=1-xml`;
         const data = await this._stalkerFetch(url, mac, null, proxy);
         const js = this._js(data);
         const token = (js && js.token) ? js.token : null;
@@ -432,7 +494,10 @@ class ApiEngine {
   // MAIN: Load Stalker Portal
   // =========================================================================
   async loadStalkerPortal(portalUrl, macAddress, proxy = '') {
-    const base = portalUrl.replace(/\/+$/, '');
+    let base = portalUrl.trim().replace(/\/+$/, '');
+    if (base.endsWith('/c')) {
+      base = base.substring(0, base.length - 2);
+    }
     const mac  = macAddress.trim().toUpperCase();
 
     if (window.appLog) window.appLog(`Portal: ${base}  MAC: ${mac}`, '#8b5cf6');
