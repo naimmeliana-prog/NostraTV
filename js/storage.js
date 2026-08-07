@@ -24,33 +24,11 @@ class StorageManager {
       playlists = JSON.parse(localStorage.getItem(STORAGE_KEYS.PLAYLISTS)) || [];
     } catch (e) {}
 
-    const hasDefaultStalker = Array.isArray(playlists) && playlists.some(p => p.id === 'pl_default_stalker');
-
-    if (!hasDefaultStalker || playlists.length === 0) {
-      localStorage.clear();
-      const defaultPlaylists = [
-        {
-          id: 'pl_default_stalker',
-          name: 'Stalker Portal MAC',
-          type: 'stalker',
-          addedAt: new Date().toISOString(),
-          status: 'active',
-          stalkerConfig: {
-            portalUrl: 'http://mag.greatott.me:80',
-            mac: '00:1A:79:74:B1:B9'
-          }
-        },
-        {
-          id: 'pl_default_m3u',
-          name: 'Lista M3U Cloud',
-          type: 'm3u',
-          url: 'https://stalker-xtream.naimmeliana.workers.dev/get.php?username=test&password=test&type=m3u_plus&output=ts',
-          addedAt: new Date().toISOString(),
-          status: 'loaded'
-        }
-      ];
-      localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(defaultPlaylists));
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_PLAYLIST_ID, 'pl_default_stalker');
+    // Only initialize defaults if storage is completely empty
+    if (!Array.isArray(playlists) || playlists.length === 0) {
+      // Start with no default playlists — user will add their own via QR/PIN or the form
+      localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify([]));
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_PLAYLIST_ID);
     }
     if (!localStorage.getItem(STORAGE_KEYS.FAVORITES)) {
       localStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify([]));

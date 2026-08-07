@@ -4,10 +4,17 @@
  * Key: MAC goes in Cookie header, token in Cookie + Authorization Bearer.
  */
 
-const STALKER_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-  '(KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
+// MAG STB emulation headers (most compatible with Stalker middleware)
+const STALKER_USER_AGENT = 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3';
 const STALKER_X_USER_AGENT = 'Model: MAG250; Link: WiFi';
+
+// Cloudflare Worker proxy URL — IMPORTANT: deploy cloudflare-worker.js to CF Workers and set this URL.
+// Instructions in the cloudflare-worker.js file.
+const CF_WORKER_URL = 'https://nostratv.naimmeliana.workers.dev/';
+
+// Public CORS proxy fallback for Stalker (some portals work with this)
+// Note: this may not work for all portals as Cookie headers might be stripped
+const PUBLIC_PROXY_FALLBACK = 'https://corsproxy.io/?url=';
 
 const STALKER_ENTRY_POINTS = [
   '/server/load.php',
@@ -22,30 +29,53 @@ class ApiEngine {
   // =========================================================================
   // LOW-LEVEL: fetch wrapper with cookie-based MAC auth (mirrors Python impl)
   // =========================================================================
-  _stalkerFetch(url, mac, token, proxyUrl = '') {
-    let activeProxy = proxyUrl;
+  /**
+   * Stalker fetch with automatic proxy selection.
+   * Priority: custom proxy → local Node server → CF Worker → direct (TV only)
+   */
+  async _stalkerFetch(url, mac, token, proxyUrl = '') {
+    const isLocal = window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1' ||
+                    window.location.hostname.startsWith('192.168.') ||
+                    window.location.hostname.startsWith('10.');
 
+    // Determine active proxy
+    let activeProxy = proxyUrl;
     if (!activeProxy) {
-      const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || 
-                          window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.');
-      if (isLocalHost && window.location.protocol.startsWith('http')) {
+      if (isLocal && window.location.protocol.startsWith('http')) {
         activeProxy = `${window.location.origin}/api/stalker-proxy`;
       } else {
-        // Fallback to the Cloudflare Worker proxy when running on TV or external browser (requires no PC server!)
-        activeProxy = 'https://nostratv.naimmeliana.workers.dev/';
+        activeProxy = CF_WORKER_URL;
       }
     }
 
+    // Try with proxy
     if (activeProxy) {
-      const target = `${activeProxy}?url=${encodeURIComponent(url)}&mac=${encodeURIComponent(mac)}&token=${encodeURIComponent(token || '')}`;
-      if (window.appLog) window.appLog(`Proxy Stalker: ${url.substring(0, 40)}...`, '#eab308');
-      return fetch(target, { method: 'GET', cache: 'no-cache' })
-        .then(r => {
-          if (!r.ok) throw new Error(`HTTP ${r.status} via Proxy`);
-          return r.json();
-        });
+      const proxyTarget = `${activeProxy.replace(/\/$/, '')}?url=${encodeURIComponent(url)}&mac=${encodeURIComponent(mac)}&token=${encodeURIComponent(token || '')}`;
+      if (window.appLog) window.appLog(`[Proxy] ${activeProxy.split('/')[2]} → ${url.substring(0, 35)}...`, '#eab308');
+      try {
+        const r = await fetch(proxyTarget, { method: 'GET', cache: 'no-cache' });
+        if (!r.ok) {
+          const errText = await r.text().catch(() => '');
+          throw new Error(`Proxy HTTP ${r.status}: ${errText.substring(0, 80)}`);
+        }
+        const text = await r.text();
+        try {
+          return JSON.parse(text);
+        } catch(je) {
+          if (window.appLog) window.appLog(`JSON parse error: ${text.substring(0, 60)}`, '#ef4444');
+          throw new Error(`Invalid JSON from proxy: ${text.substring(0, 40)}`);
+        }
+      } catch(e) {
+        if (window.appLog) window.appLog(`Proxy falló: ${e.message}`, '#ef4444');
+        // If the primary proxy fails, try direct (webOS TV can sometimes bypass CORS for same-origin portals)
+        if (!isLocal) {
+          if (window.appLog) window.appLog('Intentando conexión directa...', '#eab308');
+        }
+      }
     }
 
+    // Direct fetch (works on webOS TV native, fails on browser due to CORS)
     let cookie = `mac=${mac}; stb_lang=en; timezone=Europe/London`;
     if (token) cookie += `; token=${token}`;
 
@@ -53,14 +83,20 @@ class ApiEngine {
       'User-Agent': STALKER_USER_AGENT,
       'X-User-Agent': STALKER_X_USER_AGENT,
       'Cookie': cookie,
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'X-Requested-With': 'XMLHttpRequest',
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    return fetch(url, { method: 'GET', headers, cache: 'no-cache' })
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
-        return r.json();
-      });
+    if (window.appLog) window.appLog(`[Direct] ${url.substring(0, 50)}`, '#94a3b8');
+    const r = await fetch(url, { method: 'GET', headers, cache: 'no-cache' });
+    if (!r.ok) throw new Error(`HTTP ${r.status} directo para ${url}`);
+    const text = await r.text();
+    try {
+      return JSON.parse(text);
+    } catch(je) {
+      throw new Error(`JSON inválido (${r.status}): ${text.substring(0, 60)}`);
+    }
   }
 
   _js(data) {
