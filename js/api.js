@@ -171,9 +171,8 @@ class ApiEngine {
                     window.location.hostname === '127.0.0.1' ||
                     window.location.hostname.startsWith('192.168.') ||
                     window.location.hostname.startsWith('10.');
-
     const isTV = navigator.userAgent.toLowerCase().includes('webos') || 
-                 window.location.protocol === 'file:';
+                 !window.location.protocol.startsWith('http');
 
     // Append mac and token to the URL query string if they are not already there
     // This is required for browsers/engines that strip the Cookie header on direct fetch
