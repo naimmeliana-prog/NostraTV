@@ -68,13 +68,23 @@ export default {
     let cookie = `mac=${mac}; stb_lang=en; timezone=Europe/London`;
     if (token) cookie += `; token=${token}`;
 
+    let host = parsedTarget.host;
+    let referer = `${parsedTarget.protocol}//${parsedTarget.host}/c/`;
+    let origin = `${parsedTarget.protocol}//${parsedTarget.host}`;
+
     const proxyHeaders = {
       'User-Agent': STALKER_USER_AGENT,
       'X-User-Agent': STALKER_X_USER_AGENT,
       'Cookie': cookie,
-      'Accept': 'application/json, text/javascript, */*; q=0.01',
-      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': '*/*',
       'X-Requested-With': 'XMLHttpRequest',
+      'X-Stalker-User-Agent': STALKER_USER_AGENT,
+      'X-Stalker-Referer': referer,
+      'X-Stalker-Host': host,
+      'Origin': origin,
+      'X-User-Card': 'true',
+      'X-User-MAC': mac,
+      'X-Stalker-Cookie': cookie
     };
     if (token) proxyHeaders['Authorization'] = `Bearer ${token}`;
 

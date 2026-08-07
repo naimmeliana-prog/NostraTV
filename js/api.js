@@ -236,12 +236,29 @@ class ApiEngine {
     let cookie = `mac=${mac}; stb_lang=en; timezone=Europe/London`;
     if (token) cookie += `; token=${token}`;
 
+    let host = '';
+    let referer = '';
+    let origin = '';
+    try {
+      const u = new URL(targetUrl);
+      host = u.host;
+      referer = `${u.protocol}//${u.host}/c/`;
+      origin = `${u.protocol}//${u.host}`;
+    } catch(e) {}
+
     const headers = {
       'User-Agent': STALKER_USER_AGENT,
       'X-User-Agent': STALKER_X_USER_AGENT,
       'Cookie': cookie,
-      'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'Accept': '*/*',
       'X-Requested-With': 'XMLHttpRequest',
+      'X-Stalker-User-Agent': STALKER_USER_AGENT,
+      'X-Stalker-Referer': referer,
+      'X-Stalker-Host': host,
+      'Origin': origin,
+      'X-User-Card': 'true',
+      'X-User-MAC': mac,
+      'X-Stalker-Cookie': cookie
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
