@@ -1,6 +1,6 @@
 {
   "id": "com.nostratv.app",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "vendor": "NostraTV",
   "type": "web",
   "main": "index.html",
@@ -15,6 +15,7 @@
   "allowCrossOrigin": true,
   "disableBackHistoryAPI": true,
   "requiredPermissions": [
+    "internet",
     "network"
   ]
 }

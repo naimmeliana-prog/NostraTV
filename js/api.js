@@ -23,7 +23,7 @@ const STALKER_ENTRY_POINTS = [
   '/stalker_portal/server/load.php',
 ];
 
-// Minimal MD5 implementation + WebCrypto SHA helpers for Stalker MAC Portal authentication
+// Minimal MD5 implementation + pure JS SHA-1 and SHA-256 for Stalker MAC Portal authentication
 const CryptoHelpers = (() => {
   function md5cycle(x, k) {
     let a = x[0], b = x[1], c = x[2], d = x[3];
@@ -56,15 +56,103 @@ const CryptoHelpers = (() => {
   function hex(x){ for(let i=0;i<x.length;i++) x[i]=rhex(x[i]); return x.join(''); }
   function add32(a,b){ return (a+b)&0xffffffff; }
   function md5(s){ return hex(md51(unescape(encodeURIComponent(s)))); }
-  async function digestHex(algo, text){
-    const enc=new TextEncoder();
-    const buf=await crypto.subtle.digest(algo, enc.encode(text));
-    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+
+  // Pure JS SHA-1 implementation (no async WebCrypto needed)
+  function sha1(str) {
+    var blockstart = 0, i = 0, j = 0, W = new Array(80),
+        H0 = 0x67452301, H1 = 0xEFCDAB89, H2 = 0x98BADCFE, H3 = 0x10325476, H4 = 0xC3D2E1F0,
+        A, B, C, D, E, temp;
+    var words = [];
+    var strLen = str.length;
+    for (i = 0; i < strLen; i++) {
+      words[i >> 2] |= str.charCodeAt(i) << ((3 - (i % 4)) * 8);
+    }
+    words[strLen >> 2] |= 0x80 << ((3 - (strLen % 4)) * 8);
+    var wordCount = (((strLen + 8) >> 6) + 1) * 16;
+    while (words.length < wordCount) words.push(0);
+    words[wordCount - 1] = strLen * 8;
+    for (blockstart = 0; blockstart < wordCount; blockstart += 16) {
+      A = H0; B = H1; C = H2; D = H3; E = H4;
+      for (i = 0; i < 80; i++) {
+        if (i < 16) {
+          W[i] = words[blockstart + i];
+        } else {
+          temp = W[i - 3] ^ W[i - 8] ^ W[i - 14] ^ W[i - 16];
+          W[i] = (temp << 1) | (temp >>> 31);
+        }
+        var f, k;
+        if (i < 20) { f = (B & C) | (~B & D); k = 0x5A827999; }
+        else if (i < 40) { f = B ^ C ^ D; k = 0x6ED9EBA1; }
+        else if (i < 60) { f = (B & C) | (B & D) | (C & D); k = 0x8F1BBCDC; }
+        else { f = B ^ C ^ D; k = 0xCA62C1D6; }
+        temp = ((A << 5) | (A >>> 27)) + f + E + k + W[i];
+        E = D; D = C; C = (B << 30) | (B >>> 2); B = A; A = temp & 0xFFFFFFFF;
+      }
+      H0 = (H0 + A) & 0xFFFFFFFF; H1 = (H1 + B) & 0xFFFFFFFF; H2 = (H2 + C) & 0xFFFFFFFF; H3 = (H3 + D) & 0xFFFFFFFF; H4 = (H4 + E) & 0xFFFFFFFF;
+    }
+    var result = '';
+    var H = [H0, H1, H2, H3, H4];
+    for (i = 0; i < 5; i++) {
+      for (j = 3; j >= 0; j--) {
+        var b = (H[i] >>> (j * 8)) & 255;
+        result += (b < 16 ? '0' : '') + b.toString(16);
+      }
+    }
+    return result;
   }
+
+  // Pure JS SHA-256 implementation (no async WebCrypto needed)
+  function sha256(ascii) {
+    function rightRotate(value, amount) {
+      return (value>>>amount) | (value<<(32-amount));
+    }
+    var mathPow = Math.pow, maxWord = mathPow(2, 32), lengthProperty = 'length', i, j, result = '';
+    var words = [], asciiLength = ascii[lengthProperty], hash = sha256.h = sha256.h || [], k = sha256.k = sha256.k || [], primeCounter = k[lengthProperty];
+    var isComposite = {};
+    for (var candidate = 2; primeCounter < 64; candidate++) {
+      if (!isComposite[candidate]) {
+        for (i = 0; i < 313; i += candidate) { isComposite[i] = 1; }
+        hash[primeCounter] = (mathPow(candidate, .5)*maxWord)|0;
+        k[primeCounter++] = (mathPow(candidate, 1/3)*maxWord)|0;
+      }
+    }
+    ascii += '\x80';
+    while (ascii[lengthProperty] % 64 - 56) ascii += '\x00';
+    for (i = 0; i < ascii[lengthProperty]; i++) {
+      j = ascii.charCodeAt(i);
+      if (j >> 8) return;
+      words[i>>2] |= j << ((3 - i) % 4 * 8);
+    }
+    words[words[lengthProperty]] = ((asciiLength * 8) / maxWord) | 0;
+    words[words[lengthProperty]] = (asciiLength * 8) | 0;
+    for (j = 0; j < words[lengthProperty];) {
+      var w = words.slice(j, j += 16), oldHash = hash.slice(0);
+      hash = [0, 0, 0, 0, 0, 0, 0, 0];
+      for (i = 0; i < 64; i++) {
+        var w16 = w[i - 16], w15 = w[i - 15], w7 = w[i - 7], w2 = w[i - 2], a = oldHash[0], e = oldHash[4];
+        var temp1 = oldHash[7]
+          + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25))
+          + ((e & oldHash[5]) ^ (~e & oldHash[6]))
+          + k[i]
+          + (w[i] = (i < 16) ? w[i] : (w16 + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) + w7 + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) | 0);
+        var temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) + ((a & oldHash[1]) ^ (a & oldHash[2]) ^ (oldHash[1] & oldHash[2]));
+        oldHash = [(temp1 + temp2)|0].concat(oldHash); oldHash[4] = (oldHash[4] + temp1)|0;
+      }
+      for (i = 0; i < 8; i++) { hash[i] = (hash[i] + oldHash[i])|0; }
+    }
+    for (i = 0; i < 8; i++) {
+      for (j = 3; j + 1; j--) {
+        var b = (hash[i] >> (j * 8)) & 255;
+        result += (b < 16 ? '0' : '') + b.toString(16);
+      }
+    }
+    return result;
+  }
+
   return {
     md5,
-    sha1: t=>digestHex('SHA-1',t),
-    sha256: t=>digestHex('SHA-256',t)
+    sha1,
+    sha256
   };
 })();
 
